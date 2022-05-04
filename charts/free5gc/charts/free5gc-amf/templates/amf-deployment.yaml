@@ -1,0 +1,61 @@
+{{- with .Values.amf }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "free5gc-amf.fullname" $ }}-{{ .name }}
+  labels:
+    {{- include "free5gc-amf.labels" $ | nindent 4 }}
+    project: {{ $.Values.global.projectName }}
+    nf: {{ .name }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "free5gc-amf.selectorLabels" $ | nindent 6 }}
+      project: {{ $.Values.global.projectName }}
+      nf: {{ .name }}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/amf-configmap.yaml") $ | sha256sum }}
+      labels:
+        project: {{ $.Values.global.projectName }}
+        nf: {{ .name }}
+    spec:      
+      containers:
+      - name: {{ .name }}
+        image: {{ .image.name }}:{{ .image.tag | default $.Chart.AppVersion }}
+        imagePullPolicy: {{ .image.pullPolicy }}
+        ports:
+        - containerPort: {{ .service.port }}
+        ports:
+        - name: namf
+          containerPort: {{ .service.port }}
+        - name: n2
+          containerPort: {{ $.Values.global.amf.service.ngap.port }}
+          protocol: {{ $.Values.global.amf.service.ngap.protocol }}
+        command: ["./amf"]
+        args: ["-c", "../config/amfcfg.yaml"]
+        env:
+          - name: GIN_MODE
+            value: release
+        volumeMounts:
+        - mountPath: {{ .volume.mount }}
+          name: {{ .volume.name }}
+        resources:
+            {{- toYaml .resources | nindent 12 }}
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      nodeSelector:
+        {{- toYaml .nodeSelector | nindent 8 }}
+      affinity:
+        {{- toYaml .affinity | nindent 8 }}
+      tolerations:
+        {{- toYaml .tolerations | nindent 8 }}
+
+      volumes:
+      - name: {{ .volume.name }}
+        projected:
+          sources:
+          - configMap:
+              name: {{ .configmap.name }}
+{{- end }}
