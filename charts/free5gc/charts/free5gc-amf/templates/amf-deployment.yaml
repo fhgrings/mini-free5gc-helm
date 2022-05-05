@@ -16,23 +16,36 @@ spec:
   template:
     metadata:
       annotations:
+        {{- include "free5gc-amf.amfAnnotations" $ | nindent 8 }}
         checksum/config: {{ include (print $.Template.BasePath "/amf-configmap.yaml") $ | sha256sum }}
       labels:
+        {{- include "free5gc-amf.selectorLabels" $ | nindent 8 }}
         project: {{ $.Values.global.projectName }}
         nf: {{ .name }}
-    spec:      
+    spec:
+      initContainers:
+      - name: wait-nrf
+        {{- with $.Values.initcontainers.curl }}
+        image: {{ .registry }}/{{ .image }}:{{ .tag }}
+        {{- end }}
+        env:
+        - name: DEPENDENCIES
+          value: {{ $.Values.global.sbi.scheme }}://{{ $.Values.global.nrf.service.name }}:{{ $.Values.global.nrf.service.port }}
+        command: ['sh', '-c', 'set -x; for dependency in $DEPENDENCIES; do while [ $(curl --insecure --connect-timeout 1 -s -o /dev/null -w "%{http_code}" $dependency) -ne 200 ]; do echo waiting for dependencies; sleep 1; done; done;']   
+
       containers:
       - name: {{ .name }}
         image: {{ .image.name }}:{{ .image.tag | default $.Chart.AppVersion }}
-        imagePullPolicy: {{ .image.pullPolicy }}
         ports:
         - containerPort: {{ .service.port }}
         ports:
         - name: namf
           containerPort: {{ .service.port }}
+        {{- if $.Values.isNgapNeeded }}
         - name: n2
           containerPort: {{ $.Values.global.amf.service.ngap.port }}
           protocol: {{ $.Values.global.amf.service.ngap.protocol }}
+        {{- end }}
         command: ["./amf"]
         args: ["-c", "../config/amfcfg.yaml"]
         env:
@@ -47,8 +60,6 @@ spec:
       restartPolicy: Always
       nodeSelector:
         {{- toYaml .nodeSelector | nindent 8 }}
-      affinity:
-        {{- toYaml .affinity | nindent 8 }}
       tolerations:
         {{- toYaml .tolerations | nindent 8 }}
 

@@ -11,7 +11,7 @@ global:
     scheme: http
   amf:
     n2if:  # NGAP
-      ipAddress: 10.100.50.249
+      ipAddress: 0.0.0.0
     service:
       ngap:
         enabled: false
